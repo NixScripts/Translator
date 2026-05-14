@@ -1,16 +1,30 @@
 --[[
     TranslateScript — Loader para Executor
-    Cole este script no seu executor (Xeno, Synapse X, KRNL, etc.)
-    e execute. Ele baixa a biblioteca do GitHub e ativa a tradução automática.
+    v1.2.0 — by NixScripts
 
-    Atalhos enquanto o jogo roda:
-        F1  → Ligar / Desligar tradução + Rescan completo
-        F2  → Limpar cache + Re-traduzir tudo
+    Cole este script no seu executor (Xeno, Wave, Solara, etc.) e execute.
+    Baixa a biblioteca do GitHub e ativa a tradução automática no jogo.
+
+    Atalhos:
+        F1  → Liga / Desliga + Rescan completo
+        F2  → Limpa cache + Re-traduz tudo
         F3  → Ver estatísticas no console
 ]]
 
 -- ============================================================
--- 1. CARREGA A BIBLIOTECA DO GITHUB
+-- PROTEÇÃO CONTRA DUPLA EXECUÇÃO
+-- getgenv() é o ambiente global do executor (padrão UNC)
+-- ============================================================
+local genv = getgenv()
+if genv.__TRANSLATESCRIPT_LOADED then
+    print("[TranslateScript] ⚠ Já está rodando! Use F2 para resetar.")
+    return
+end
+genv.__TRANSLATESCRIPT_LOADED = true
+
+-- ============================================================
+-- CARREGA A BIBLIOTECA DO GITHUB
+-- Padrão de executor: loadstring(game:HttpGet("url"))()
 -- ============================================================
 local LIB_URL = "https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"
 
@@ -19,43 +33,43 @@ local ok, TranslatorLib = pcall(function()
 end)
 
 if not ok or not TranslatorLib then
+    genv.__TRANSLATESCRIPT_LOADED = nil
     warn("[TranslateScript] ❌ Falha ao carregar biblioteca: " .. tostring(TranslatorLib))
-    warn("[TranslateScript] Verifique se o executor tem acesso a game:HttpGet()")
     return
 end
 
 print("[TranslateScript] ✅ Biblioteca carregada!")
 
 -- ============================================================
--- 2. INSTÂNCIA DO TRADUTOR
+-- INSTÂNCIA E CONFIGURAÇÃO
 -- ============================================================
-local translator = TranslatorLib.new()
-local TARGET_LANG = "pt"   -- Idioma alvo (pt = Português)
-local SOURCE_LANG = "auto" -- Detecta automaticamente
+local translator  = TranslatorLib.new()
+local TARGET_LANG = "pt"    -- idioma alvo
+local SOURCE_LANG = "auto"  -- detecta automaticamente
 
 -- ============================================================
--- 3. ESTATÍSTICAS
+-- ESTATÍSTICAS
 -- ============================================================
 local Stats = {
-    translated    = 0,
-    skipped       = 0,
-    failed        = 0,
-    apiHits       = 0,
-    cacheHits     = 0,
-    startTime     = tick(),
+    translated = 0,
+    skipped    = 0,
+    failed     = 0,
+    apiHits    = 0,
+    cacheHits  = 0,
+    startTime  = tick(),
 }
 
 -- ============================================================
--- 4. CONTROLES
+-- CONTROLES
 -- ============================================================
-local isEnabled      = true
-local processingSet  = {} -- guarda TextObjects em processamento (evita loop)
-local pendingQueue   = {} -- fila de objetos esperando debounce
-local DEBOUNCE_TIME  = 0.8  -- segundos de espera após última mudança (typewriter)
-local RATE_DELAY     = 0.2  -- segundos entre requisições à API
+local isEnabled     = true
+local processingSet = {}   -- evita loop ao modificar .Text
+local pendingQueue  = {}   -- debounce por objeto
+local DEBOUNCE_TIME = 0.8  -- aguarda typewriter terminar (segundos)
+local RATE_DELAY    = 0.2  -- intervalo entre requisições à API
 
 -- ============================================================
--- 5. FUNÇÃO CENTRAL: traduz um TextObject
+-- TRADUZ UM OBJETO DE TEXTO
 -- ============================================================
 local function translateObject(obj)
     if processingSet[obj] then return end
@@ -64,15 +78,14 @@ local function translateObject(obj)
     local original = obj.Text
     if not original or original == "" then return end
 
-    -- Marca como em processamento para evitar loop
     processingSet[obj] = true
 
     local cacheBefore = translator:getCacheSize()
-    local ok, result = pcall(function()
+    local success, result = pcall(function()
         return translator:translate(original, TARGET_LANG, SOURCE_LANG)
     end)
 
-    if not ok then
+    if not success then
         Stats.failed = Stats.failed + 1
         processingSet[obj] = nil
         return
@@ -80,13 +93,13 @@ local function translateObject(obj)
 
     if result and result ~= original then
         if translator:getCacheSize() > cacheBefore then
-            Stats.apiHits = Stats.apiHits + 1
+            Stats.apiHits   = Stats.apiHits + 1
         else
             Stats.cacheHits = Stats.cacheHits + 1
         end
         Stats.translated = Stats.translated + 1
 
-        -- Aplica só se o texto não mudou enquanto aguardávamos
+        -- Aplica só se o texto não mudou enquanto esperávamos
         if obj.Parent and obj.Text == original then
             obj.Text = result
         end
@@ -98,17 +111,13 @@ local function translateObject(obj)
 end
 
 -- ============================================================
--- 6. DEBOUNCE: espera o typewriter terminar antes de traduzir
+-- DEBOUNCE — aguarda typewriter effect terminar
 -- ============================================================
 local function scheduleTranslation(obj)
     if not isEnabled then return end
-
-    -- Cancela agendamento anterior deste objeto
     pendingQueue[obj] = tick()
-
     local scheduledAt = pendingQueue[obj]
     task.delay(DEBOUNCE_TIME, function()
-        -- Só executa se não houve nova mudança depois
         if pendingQueue[obj] == scheduledAt then
             pendingQueue[obj] = nil
             translateObject(obj)
@@ -118,17 +127,19 @@ local function scheduleTranslation(obj)
 end
 
 -- ============================================================
--- 7. MONITORA UM OBJETO DE TEXTO
+-- MONITORA UM OBJETO DE TEXTO
 -- ============================================================
 local connections = {}
 local function watchObject(obj)
-    if not obj:IsA("TextLabel")
-        and not obj:IsA("TextButton")
-        and not obj:IsA("TextBox") then
+    if not pcall(function()
+        return obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")
+    end) then return end
+
+    if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then
         return
     end
 
-    -- Traduz texto atual imediatamente
+    -- Traduz o texto atual
     if isEnabled then
         task.spawn(translateObject, obj)
     end
@@ -143,58 +154,51 @@ local function watchObject(obj)
 end
 
 -- ============================================================
--- 8. SCAN COMPLETO DA GUI
+-- SCAN COMPLETO DA GUI
 -- ============================================================
 local function scanGui(root)
     local ok, err = pcall(function()
-        local descendants = root:GetDescendants()
-        for _, child in ipairs(descendants) do
-            pcall(watchObject, child)
+        for _, desc in ipairs(root:GetDescendants()) do
+            pcall(watchObject, desc)
         end
     end)
     if not ok then
-        warn("[TranslateScript] scanGui error: " .. tostring(err))
+        warn("[TranslateScript] scanGui: " .. tostring(err))
     end
 end
 
 local function fullScan()
-    print("[TranslateScript] 🔍 Iniciando scan completo da GUI...")
+    print("[TranslateScript] 🔍 Scanning GUI...")
     Stats.startTime = tick()
 
-    -- PlayerGui (GUI do jogador)
+    -- PlayerGui
     local ok1, playerGui = pcall(function()
         return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui", 5)
     end)
     if ok1 and playerGui then
         scanGui(playerGui)
-
-        -- Monitora novos elementos adicionados
         local conn = playerGui.DescendantAdded:Connect(function(desc)
-            if isEnabled then
-                task.spawn(watchObject, desc)
-            end
+            if isEnabled then task.spawn(watchObject, desc) end
         end)
         table.insert(connections, conn)
     end
 
-    -- CoreGui (tentativa — pode falhar por permissões)
-    pcall(function()
-        scanGui(game:GetService("CoreGui"))
-    end)
+    -- CoreGui (pode falhar em alguns jogos — silencioso)
+    pcall(function() scanGui(game:GetService("CoreGui")) end)
 
     print(string.format("[TranslateScript] ✅ Scan concluído! Cache: %d entradas",
         translator:getCacheSize()))
 end
 
 -- ============================================================
--- 9. LIMPA TUDO
+-- RESET TOTAL
 -- ============================================================
-local function clearAll()
+local function resetAll()
     for _, conn in ipairs(connections) do
         pcall(function() conn:Disconnect() end)
     end
-    connections  = {}
-    pendingQueue = {}
+    connections   = {}
+    pendingQueue  = {}
     processingSet = {}
     translator:clearCache()
     Stats.translated = 0
@@ -206,7 +210,7 @@ local function clearAll()
 end
 
 -- ============================================================
--- 10. ATALHOS DE TECLADO
+-- ATALHOS DE TECLADO
 -- ============================================================
 local UIS = game:GetService("UserInputService")
 UIS.InputBegan:Connect(function(input, gameProcessed)
@@ -215,46 +219,46 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
     if input.KeyCode == Enum.KeyCode.F1 then
         isEnabled = not isEnabled
         if isEnabled then
-            print("[TranslateScript] ▶ Tradução ATIVADA — Fazendo rescan...")
+            print("[TranslateScript] ▶ ATIVADO — rescanning...")
             fullScan()
         else
-            print("[TranslateScript] ⏸ Tradução DESATIVADA")
+            print("[TranslateScript] ⏸ DESATIVADO")
         end
 
     elseif input.KeyCode == Enum.KeyCode.F2 then
-        print("[TranslateScript] 🔄 Limpando cache e re-traduzindo tudo...")
-        clearAll()
+        print("[TranslateScript] 🔄 Resetando e re-traduzindo...")
+        resetAll()
         isEnabled = true
         fullScan()
 
     elseif input.KeyCode == Enum.KeyCode.F3 then
-        local elapsed = math.floor(tick() - Stats.startTime)
         print(string.format(
-            "[TranslateScript] 📊 Estatísticas:\n"..
+            "[TranslateScript] 📊 Stats:\n"..
             "  ✅ Traduzidos : %d\n"..
-            "  ⏭ Pulados    : %d\n"..
+            "  ⏭  Pulados    : %d\n"..
             "  ❌ Falhas     : %d\n"..
             "  📡 API hits   : %d\n"..
             "  💾 Cache hits : %d\n"..
-            "  🕒 Rodando há : %ds\n"..
+            "  🕒 Uptime     : %ds\n"..
             "  📦 Cache size : %d",
             Stats.translated, Stats.skipped, Stats.failed,
-            Stats.apiHits, Stats.cacheHits, elapsed,
+            Stats.apiHits, Stats.cacheHits,
+            math.floor(tick() - Stats.startTime),
             translator:getCacheSize()
         ))
     end
 end)
 
 -- ============================================================
--- 11. INICIA
+-- INICIA
 -- ============================================================
-print("[TranslateScript] 🚀 Iniciando tradutor universal...")
-print(string.format("[TranslateScript] 🌐 Idioma alvo: %s | Debounce: %.1fs | Rate: %.0fms",
+print("[TranslateScript] 🚀 TranslateScript v1.2.0 iniciando...")
+print(string.format("[TranslateScript] 🌐 Lang: %s | Debounce: %.1fs | Rate: %.0fms",
     TARGET_LANG, DEBOUNCE_TIME, RATE_DELAY * 1000))
-print("[TranslateScript] Atalhos: F1 = Liga/Desliga | F2 = Rescan | F3 = Stats")
+print("[TranslateScript] F1 = Liga/Desliga | F2 = Reset | F3 = Stats")
 
 fullScan()
 
--- Exporta para _G (uso externo)
-_G.TranslatorLib = TranslatorLib
-_G.translator    = translator
+-- Exporta via getgenv() — padrão executor (não _G)
+genv.TranslatorLib = TranslatorLib
+genv.translator    = translator
