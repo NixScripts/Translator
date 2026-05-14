@@ -12,7 +12,7 @@
 -- ============================================================
 -- 1. CARREGA A BIBLIOTECA DO GITHUB
 -- ============================================================
-local LIB_URL = "https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate.lua"
+local LIB_URL = "https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"
 
 local ok, TranslatorLib = pcall(function()
     return loadstring(game:HttpGet(LIB_URL))()
