@@ -4,7 +4,7 @@
     Execute no executor para verificar se tudo funciona.
 ]]
 
-local genv = getgenv()
+local genv = (type(getgenv) == "function" and getgenv()) or _G
 if genv.__TRANSLATESCRIPT_TEST_LOADED then
     print("[TESTE] ⚠ Teste já rodando!")
     return
