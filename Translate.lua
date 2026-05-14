@@ -48,13 +48,36 @@ local SKIP_WORDS = {
 -- ============================================================
 -- ABSTRAÇÃO DE REQUISIÇÃO HTTP
 -- Detecta o ambiente automaticamente (executor ou Roblox padrão)
+-- Usa rawget(_G, ...) para não explodir se a global não existir
 -- ============================================================
+local function getRequestFunc()
+    -- Verifica cada global com rawget para não dar erro
+    local r = rawget(_G, "request")
+    if type(r) == "function" then return r end
+
+    local hr = rawget(_G, "http_request")
+    if type(hr) == "function" then return hr end
+
+    local syn = rawget(_G, "syn")
+    if type(syn) == "table" and type(syn.request) == "function" then
+        return syn.request
+    end
+
+    local fluxus = rawget(_G, "fluxus")
+    if type(fluxus) == "table" and type(fluxus.request) == "function" then
+        return fluxus.request
+    end
+
+    local http = rawget(_G, "http")
+    if type(http) == "table" and type(http.request) == "function" then
+        return http.request
+    end
+
+    return nil
+end
+
 local function universalRequest(options)
-    -- Tenta funções nativas de executores primeiro
-    local requestFunc = (typeof(request) == "function" and request)
-        or (typeof(http_request) == "function" and http_request)
-        or (syn and typeof(syn.request) == "function" and syn.request)
-        or (fluxus and typeof(fluxus.request) == "function" and fluxus.request)
+    local requestFunc = getRequestFunc()
 
     if requestFunc then
         local ok, response = pcall(requestFunc, {
@@ -69,7 +92,15 @@ local function universalRequest(options)
         return nil
     end
 
-    -- Fallback: HttpService do Roblox (Studio / servidor)
+    -- Fallback: game:HttpGet() (funciona em muitos executores mesmo sem request)
+    if options.Method ~= "POST" then
+        local ok, result = pcall(function()
+            return game:HttpGet(options.Url, true)
+        end)
+        if ok and result then return result end
+    end
+
+    -- Último fallback: HttpService do Roblox (Studio / servidor)
     local ok, HttpService = pcall(function()
         return game:GetService("HttpService")
     end)
@@ -175,9 +206,14 @@ function Translator:_doRequest(text, targetLang, sourceLang)
         -- Resposta é um JSON nested: [[[translated, original, ...], ...], ...]
         local translated = resp:match('%[%[%["(.-)"')
         if translated and translated ~= "" then
-            -- Decode escapes unicode simples
+            -- Decode escapes unicode (\uXXXX) com fallback seguro
             translated = translated:gsub("\\u(%x%x%x%x)", function(h)
-                return utf8.char(tonumber(h, 16))
+                local n = tonumber(h, 16)
+                if n and utf8 and utf8.char then
+                    local ok2, ch = pcall(utf8.char, n)
+                    return ok2 and ch or ("\\u"..h)
+                end
+                return "\\u"..h
             end)
             return translated
         end
