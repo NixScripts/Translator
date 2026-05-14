@@ -67,21 +67,26 @@ local function translateObject(obj)
     -- Marca como em processamento para evitar loop
     processingSet[obj] = true
 
-    local cacheKey = original .. "|" .. TARGET_LANG
-    local cacheSize = translator:getCacheSize()
+    local cacheBefore = translator:getCacheSize()
+    local ok, result = pcall(function()
+        return translator:translate(original, TARGET_LANG, SOURCE_LANG)
+    end)
 
-    local result = translator:translate(original, TARGET_LANG, SOURCE_LANG)
+    if not ok then
+        Stats.failed = Stats.failed + 1
+        processingSet[obj] = nil
+        return
+    end
 
     if result and result ~= original then
-        -- Verifica se o cache cresceu (foi API, não cache)
-        if translator:getCacheSize() > cacheSize then
+        if translator:getCacheSize() > cacheBefore then
             Stats.apiHits = Stats.apiHits + 1
         else
             Stats.cacheHits = Stats.cacheHits + 1
         end
         Stats.translated = Stats.translated + 1
 
-        -- Aplica tradução apenas se o texto não mudou enquanto aguardávamos
+        -- Aplica só se o texto não mudou enquanto aguardávamos
         if obj.Parent and obj.Text == original then
             obj.Text = result
         end
