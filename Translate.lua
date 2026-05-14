@@ -1,46 +1,49 @@
 --[[
     Universal Luau Translator Library
-    v1.1.0 — by NixScripts
+    v1.2.0 — by NixScripts
 
-    Uso via loadstring (executor):
+    Uso (executor):
         local Translator = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"))()
         local t = Translator.new()
         print(t:translate("Hello World", "pt"))
 
     Métodos:
-        Translator.new()                        → Cria nova instância
+        Translator.new()                        → Cria instância
         translator:translate(text, targetLang)  → Traduz texto
         translator:clearCache()                 → Limpa o cache
-        translator:getCacheSize()               → Retorna entradas no cache
-        translator:setRequestFunction(fn)       → Define função HTTP customizada
+        translator:getCacheSize()               → Qtd de entradas no cache
+        translator:setRequestFunction(fn)       → Função HTTP customizada
 ]]
 
 local Translator = {}
 Translator.__index = Translator
 
 -- ============================================================
--- PALAVRAS QUE NÃO PRECISAM SER TRADUZIDAS
+-- PALAVRAS QUE NÃO PRECISAM DE TRADUÇÃO
 -- ============================================================
 local SKIP_WORDS = {
-    ["shift"] = true, ["ctrl"] = true, ["alt"] = true, ["tab"] = true,
-    ["esc"] = true, ["enter"] = true, ["delete"] = true, ["backspace"] = true,
-    ["space"] = true, ["capslock"] = true, ["numlock"] = true,
-    ["e"] = true, ["q"] = true, ["w"] = true, ["r"] = true,
-    ["f"] = true, ["g"] = true, ["v"] = true, ["c"] = true,
-    ["ui"] = true, ["npc"] = true, ["hp"] = true, ["mp"] = true,
-    ["xp"] = true, ["pvp"] = true, ["pve"] = true, ["id"] = true,
-    ["fps"] = true, ["dps"] = true, ["aoe"] = true, ["dot"] = true,
-    ["buff"] = true, ["debuff"] = true, ["boss"] = true, ["mob"] = true,
-    ["skill"] = true, ["level"] = true, ["loot"] = true, ["grind"] = true,
-    ["spawn"] = true, ["map"] = true, ["slot"] = true, ["cd"] = true,
-    ["api"] = true, ["url"] = true, ["html"] = true, ["json"] = true,
-    ["ok"] = true, ["status"] = true, ["error"] = true, ["debug"] = true,
+    -- Teclas
+    ["shift"]=true, ["ctrl"]=true, ["alt"]=true, ["tab"]=true,
+    ["esc"]=true, ["enter"]=true, ["delete"]=true, ["backspace"]=true,
+    ["space"]=true, ["capslock"]=true, ["numlock"]=true,
+    -- Atalhos comuns em jogos
+    ["e"]=true, ["q"]=true, ["w"]=true, ["r"]=true,
+    ["f"]=true, ["g"]=true, ["v"]=true, ["c"]=true,
+    -- Termos de jogo iguais nos dois idiomas
+    ["ui"]=true, ["npc"]=true, ["hp"]=true, ["mp"]=true,
+    ["xp"]=true, ["pvp"]=true, ["pve"]=true, ["id"]=true,
+    ["fps"]=true, ["dps"]=true, ["aoe"]=true, ["dot"]=true,
+    ["buff"]=true, ["debuff"]=true, ["boss"]=true, ["mob"]=true,
+    ["skill"]=true, ["level"]=true, ["loot"]=true, ["grind"]=true,
+    ["spawn"]=true, ["map"]=true, ["slot"]=true, ["cd"]=true,
+    -- Siglas técnicas
+    ["api"]=true, ["url"]=true, ["html"]=true, ["json"]=true,
+    ["ok"]=true, ["status"]=true, ["error"]=true, ["debug"]=true,
 }
 
 -- ============================================================
--- HTTP — game:HttpGet para GET (padrão de executor)
--- request/http_request para POST se disponível
--- Sem fallback de HttpService — ambiente executor apenas
+-- HTTP GET
+-- Ambas as APIs usam GET — game:HttpGet é o padrão em executores
 -- ============================================================
 local function httpGet(url)
     local ok, result = pcall(function()
@@ -49,26 +52,8 @@ local function httpGet(url)
     return ok and result or nil
 end
 
-local function httpPost(url, body)
-    local postFn = rawget(_G, "request")
-                or rawget(_G, "http_request")
-                or (rawget(_G, "syn") and rawget(_G, "syn").request)
-                or (rawget(_G, "http") and rawget(_G, "http").request)
-
-    if not postFn then return nil end
-
-    local ok, response = pcall(postFn, {
-        Url     = url,
-        Method  = "POST",
-        Headers = { ["Content-Type"] = "application/json" },
-        Body    = body,
-    })
-
-    return ok and response and (response.Body or response.body) or nil
-end
-
 -- ============================================================
--- URL ENCODE manual (sem depender de HttpService)
+-- URL ENCODE manual — sem depender de nenhum service
 -- ============================================================
 local function urlEncode(str)
     return str:gsub("([^%w%-%.%_%~])", function(c)
@@ -77,37 +62,37 @@ local function urlEncode(str)
 end
 
 -- ============================================================
--- SANITIZAÇÃO — remove RichText/Color3 tags e entidades HTML
+-- SANITIZAÇÃO — remove RichText, Color3 tags e entidades HTML
 -- ============================================================
 local function sanitize(text)
     if not text or text == "" then return "" end
     local s = text
-    s = s:gsub("<[^>]+>", "")
-    s = s:gsub("%[color=[^%]]+%]", "")
+    s = s:gsub("<[^>]+>", "")            -- tags HTML/RichText
+    s = s:gsub("%[color=[^%]]+%]", "")   -- [color=...] do Roblox
     s = s:gsub("%[/color%]", "")
-    s = s:gsub("&nbsp;", " ")
-    s = s:gsub("&quot;", '"')
-    s = s:gsub("&#39;",  "'")
-    s = s:gsub("&amp;",  "&")
-    s = s:gsub("&lt;",   "<")
-    s = s:gsub("&gt;",   ">")
-    s = s:match("^%s*(.-)%s*$")
+    s = s:gsub("&nbsp;",  " ")
+    s = s:gsub("&quot;",  '"')
+    s = s:gsub("&#39;",   "'")
+    s = s:gsub("&amp;",   "&")
+    s = s:gsub("&lt;",    "<")
+    s = s:gsub("&gt;",    ">")
+    s = s:match("^%s*(.-)%s*$")           -- trim
     return s
 end
 
 -- ============================================================
--- SKIP — decide se o texto precisa de tradução
+-- SKIP — decide se o texto precisa ser traduzido
 -- ============================================================
 local function shouldSkip(text)
     if not text or #text < 2 then return true end
-    if text:match("^[%d%s%p]+$") then return true end
-    if not text:match("%a") then return true end
+    if text:match("^[%d%s%p]+$") then return true end  -- só números/símbolos
+    if not text:match("%a") then return true end         -- nenhuma letra
     if SKIP_WORDS[text:lower()] then return true end
     return false
 end
 
 -- ============================================================
--- DECODE unicode escape (\uXXXX)
+-- DECODE unicode escape (\uXXXX) seguro
 -- ============================================================
 local function decodeUnicode(str)
     return str:gsub("\\u(%x%x%x%x)", function(h)
@@ -133,12 +118,13 @@ function Translator.new()
 end
 
 -- ============================================================
--- REQUISIÇÃO: Google Translate → MyMemory (fallback)
+-- REQUISIÇÃO: Google Translate (GET) → MyMemory (GET fallback)
+-- Ambas as APIs são GET — nenhum POST necessário
 -- ============================================================
 function Translator:_doRequest(text, targetLang, sourceLang)
     local encoded = urlEncode(text)
 
-    -- API 1: Google Translate (não oficial, sem limite prático)
+    -- API 1: Google Translate (não oficial, ilimitada, mais rápida)
     local googleUrl = string.format(
         "https://translate.googleapis.com/translate_a/single?client=gtx&sl=%s&tl=%s&dt=t&q=%s",
         sourceLang, targetLang, encoded
@@ -151,7 +137,7 @@ function Translator:_doRequest(text, targetLang, sourceLang)
         end
     end
 
-    -- API 2: MyMemory (fallback)
+    -- API 2: MyMemory (fallback, GET)
     local mmUrl = string.format(
         "https://api.mymemory.translated.net/get?q=%s&langpair=%s|%s",
         encoded,
@@ -192,7 +178,7 @@ function Translator:translate(text, targetLang, sourceLang)
 
     if result and result ~= "" and result ~= clean then
         if self._cacheSize >= self._maxCache then
-            self._cache    = {}
+            self._cache     = {}
             self._cacheSize = 0
         end
         self._cache[cacheKey] = result
