@@ -12,7 +12,7 @@ Script de tradução universal para executores Roblox. Traduz automaticamente to
 - **Rate limiting** — espaça requisições para não ser bloqueado
 - **Palavras neutras** — Shift, Ctrl, HP, NPC etc. não são traduzidas
 - **Sanitização de tags** — remove `<font color>` e outros RichText antes de traduzir
-- **Proteção de dupla execução** — `getgenv()` evita conflitos ao rodar duas vezes
+- **Proteção de dupla execução** — `getgenv()` (ou `_G` como fallback) evita conflitos ao rodar duas vezes
 - **Compatível com executores**: Xeno, Wave, Solara, Synapse X, KRNL e outros
 
 ## 🚀 Como usar
@@ -93,7 +93,7 @@ Qualquer idioma suportado pelo Google Translate. Exemplos:
 ## ⚙️ Como funciona internamente
 
 1. `loader.lua` usa `loadstring(game:HttpGet(url))()` — padrão de executor — para baixar e executar `Translate.lua` do GitHub
-2. `getgenv()` guarda o estado global do executor, evitando conflito se executar duas vezes
+2. `getgenv()` (com fallback para `_G`) guarda o estado global do executor, evitando conflito se executar duas vezes
 3. Toda requisição HTTP usa `game:HttpGet()` (GET puro), sem depender de `HttpService`
 4. Google Translate é consultado primeiro; se falhar, cai para MyMemory automaticamente
 
