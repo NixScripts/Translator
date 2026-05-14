@@ -13,9 +13,9 @@
 
 -- ============================================================
 -- PROTEÇÃO CONTRA DUPLA EXECUÇÃO
--- getgenv() é o ambiente global do executor (padrão UNC)
+-- getgenv() é o padrão UNC — fallback para _G se não existir
 -- ============================================================
-local genv = getgenv()
+local genv = (type(getgenv) == "function" and getgenv()) or _G
 if genv.__TRANSLATESCRIPT_LOADED then
     print("[TranslateScript] ⚠ Já está rodando! Use F2 para resetar.")
     return
@@ -259,6 +259,6 @@ print("[TranslateScript] F1 = Liga/Desliga | F2 = Reset | F3 = Stats")
 
 fullScan()
 
--- Exporta via getgenv() — padrão executor (não _G)
+-- Exporta via genv (getgenv() se disponível, _G caso contrário)
 genv.TranslatorLib = TranslatorLib
 genv.translator    = translator
