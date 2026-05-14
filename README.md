@@ -5,14 +5,15 @@ Script de tradução universal para executores Roblox. Traduz automaticamente to
 ## ✨ Funcionalidades
 
 - **Tradução automática** de TextLabels, TextButtons e TextBoxes
-- **Cascade de APIs**: Google Translate → LibreTranslate → MyMemory (sem limite prático)
-- **Debounce inteligente** — aguarda o typewriter effect terminar antes de traduzir
-- **Cache embutido** — palavras já traduzidas são reutilizadas instantaneamente
-- **Loop prevention** — não entra em loop ao modificar o texto
-- **Rate limiting** — espaça as requisições para não ser bloqueado
-- **Palavras neutras** — Shift, Ctrl, HP, NPC etc. não são enviadas para tradução
+- **APIs em cascata**: Google Translate → MyMemory (sem limite prático, GET puro)
+- **Debounce inteligente** — aguarda typewriter effect terminar antes de traduzir
+- **Cache embutido** — textos já traduzidos são reutilizados instantaneamente
+- **Loop prevention** — não entra em loop ao modificar `.Text`
+- **Rate limiting** — espaça requisições para não ser bloqueado
+- **Palavras neutras** — Shift, Ctrl, HP, NPC etc. não são traduzidas
 - **Sanitização de tags** — remove `<font color>` e outros RichText antes de traduzir
-- **Compatível com executores**: Xeno, Synapse X, KRNL, Fluxus e outros
+- **Proteção de dupla execução** — `getgenv()` evita conflitos ao rodar duas vezes
+- **Compatível com executores**: Xeno, Wave, Solara, Synapse X, KRNL e outros
 
 ## 🚀 Como usar
 
@@ -23,7 +24,7 @@ Cole o conteúdo de `loader.lua` no seu executor e execute. Ele baixa a bibliote
 ### Opção 2: Via loadstring manual
 
 ```lua
-local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate.lua"))()
+local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"))()
 local t = TranslatorLib.new()
 print(t:translate("Hello World", "pt"))  -- Olá Mundo
 ```
@@ -45,13 +46,13 @@ TranslateScript/
 ├── README.md
 └── examples/
     ├── simple_test.lua    ← Teste rápido de tradução
-    └── gui_translator.lua ← Integração com GUI + debug visual
+    └── gui_translator.lua ← Versão standalone com debug visual
 ```
 
 ## 🔧 API da Biblioteca
 
 ```lua
-local TranslatorLib = loadstring(game:HttpGet("URL"))()
+local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"))()
 
 -- Criar instância
 local t = TranslatorLib.new()
@@ -59,16 +60,16 @@ local t = TranslatorLib.new()
 -- Traduzir texto
 local resultado = t:translate("Play Game", "pt")
 
+-- Traduzir com idioma de origem explícito
+local resultado = t:translate("Play Game", "pt", "en")
+
 -- Limpar cache
 t:clearCache()
 
 -- Ver tamanho do cache
 print(t:getCacheSize())
 
--- Trocar URL da API
-t:setApiUrl("https://minha-api.com")
-
--- Função de requisição customizada
+-- Usar função de requisição customizada
 t:setRequestFunction(function(text, targetLang, sourceLang)
     -- sua lógica aqui
     return texto_traduzido
@@ -79,16 +80,23 @@ end)
 
 Qualquer idioma suportado pelo Google Translate. Exemplos:
 
-| Código | Idioma     |
-|--------|------------|
-| `pt`   | Português  |
-| `en`   | Inglês     |
-| `es`   | Espanhol   |
-| `fr`   | Francês    |
-| `de`   | Alemão     |
-| `ja`   | Japonês    |
-| `zh`   | Chinês     |
+| Código | Idioma    |
+|--------|-----------|
+| `pt`   | Português |
+| `en`   | Inglês    |
+| `es`   | Espanhol  |
+| `fr`   | Francês   |
+| `de`   | Alemão    |
+| `ja`   | Japonês   |
+| `zh`   | Chinês    |
+
+## ⚙️ Como funciona internamente
+
+1. `loader.lua` usa `loadstring(game:HttpGet(url))()` — padrão de executor — para baixar e executar `Translate.lua` do GitHub
+2. `getgenv()` guarda o estado global do executor, evitando conflito se executar duas vezes
+3. Toda requisição HTTP usa `game:HttpGet()` (GET puro), sem depender de `HttpService`
+4. Google Translate é consultado primeiro; se falhar, cai para MyMemory automaticamente
 
 ## ⚠️ Aviso
 
-Este script é destinado a uso pessoal para compreensão de jogos. Usar executores em jogos online pode violar os Termos de Serviço do Roblox. Use com responsabilidade.
+Este script é destinado a uso pessoal para compreensão de jogos. Use com responsabilidade.
