@@ -4,7 +4,7 @@
     Útil para verificar quais TextLabels estão sendo encontradas.
 ]]
 
-local genv = getgenv()
+local genv = (type(getgenv) == "function" and getgenv()) or _G
 if genv.__TRANSLATESCRIPT_GUI_LOADED then
     print("[GUITranslator] ⚠ Já está rodando!")
     return
