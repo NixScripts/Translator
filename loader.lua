@@ -141,13 +141,15 @@ end
 -- 8. SCAN COMPLETO DA GUI
 -- ============================================================
 local function scanGui(root)
-    local function recurse(parent)
-        for _, child in ipairs(parent:GetChildren()) do
+    local ok, err = pcall(function()
+        local descendants = root:GetDescendants()
+        for _, child in ipairs(descendants) do
             pcall(watchObject, child)
-            recurse(child)
         end
+    end)
+    if not ok then
+        warn("[TranslateScript] scanGui error: " .. tostring(err))
     end
-    pcall(recurse, root)
 end
 
 local function fullScan()
