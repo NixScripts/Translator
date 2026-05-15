@@ -24,7 +24,7 @@ Cole o conteúdo de `loader.lua` no seu executor e execute. Ele baixa a bibliote
 ### Opção 2: Via loadstring manual
 
 ```lua
-local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"))()
+local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
 local t = TranslatorLib.new()
 print(t:translate("Hello World", "pt"))  -- Olá Mundo
 ```
@@ -52,7 +52,7 @@ TranslateScript/
 ## 🔧 API da Biblioteca
 
 ```lua
-local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"))()
+local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
 
 -- Criar instância
 local t = TranslatorLib.new()
