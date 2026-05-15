@@ -11,15 +11,30 @@ if genv.__TRANSLATESCRIPT_TEST_LOADED then
 end
 genv.__TRANSLATESCRIPT_TEST_LOADED = true
 
-local LIB_URL = "https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"
+local LIB_URLS = {
+    "https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua",
+}
 
-local ok, TranslatorLib = pcall(function()
-    return loadstring(game:HttpGet(LIB_URL))()
-end)
+local TranslatorLib
+for _, url in ipairs(LIB_URLS) do
+    local ok, raw = pcall(function() return game:HttpGet(url, true) end)
+    if ok and raw and #raw > 0 then
+        local chunk, err = loadstring(raw)
+        if chunk then
+            local ok2, result = pcall(chunk)
+            if ok2 and result then
+                TranslatorLib = result
+                break
+            end
+        else
+            warn("[TESTE] ⚠ Compile error: " .. tostring(err))
+        end
+    end
+end
 
-if not ok or not TranslatorLib then
+if not TranslatorLib then
     genv.__TRANSLATESCRIPT_TEST_LOADED = nil
-    warn("[TESTE] ❌ Falha ao carregar biblioteca: " .. tostring(TranslatorLib))
+    warn("[TESTE] ❌ Falha ao carregar biblioteca.")
     return
 end
 
