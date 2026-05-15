@@ -11,27 +11,50 @@ if genv.__TRANSLATESCRIPT_GUI_LOADED then
 end
 genv.__TRANSLATESCRIPT_GUI_LOADED = true
 
-local LIB_URL = "https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"
+local LIB_URLS = {
+    "https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua",
+}
 
-local ok, TranslatorLib = pcall(function()
-    return loadstring(game:HttpGet(LIB_URL))()
-end)
+local TranslatorLib
+for _, url in ipairs(LIB_URLS) do
+    local ok, raw = pcall(function() return game:HttpGet(url) end)
+    if ok and raw and #raw > 0 then
+        local chunk, err = loadstring(raw)
+        if chunk then
+            local ok2, result = pcall(chunk)
+            if ok2 and result then
+                TranslatorLib = result
+                break
+            end
+        else
+            warn("[GUITranslator] ⚠ Compile error: " .. tostring(err))
+        end
+    end
+end
 
-if not ok or not TranslatorLib then
+if not TranslatorLib then
     genv.__TRANSLATESCRIPT_GUI_LOADED = nil
-    warn("[GUITranslator] ❌ Falha ao carregar biblioteca: " .. tostring(TranslatorLib))
+    warn("[GUITranslator] ❌ Falha ao carregar biblioteca.")
     return
 end
 
 local translator  = TranslatorLib.new()
 local TARGET_LANG = "pt"
-local DEBUG_MODE  = true  -- false para reduzir prints no console
+local DEBUG_MODE  = true
 
 -- ============================================================
--- OVERLAY DE DEBUG (contador no canto da tela)
+-- OVERLAY DE DEBUG
+-- BUG FIX: FindFirstChild em vez de WaitForChild (não bloqueia)
 -- ============================================================
 local player    = game:GetService("Players").LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui", 10)
+local playerGui = player:FindFirstChild("PlayerGui")
+                  or player:WaitForChild("PlayerGui", 10)
+
+if not playerGui then
+    genv.__TRANSLATESCRIPT_GUI_LOADED = nil
+    warn("[GUITranslator] ❌ PlayerGui não encontrado.")
+    return
+end
 
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name         = "TranslatorDebugGui"
@@ -39,29 +62,28 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent       = playerGui
 
 local debugLabel = Instance.new("TextLabel")
-debugLabel.Size                  = UDim2.new(0, 220, 0, 40)
-debugLabel.Position              = UDim2.new(0, 10, 0, 10)
-debugLabel.BackgroundColor3      = Color3.fromRGB(0, 0, 0)
+debugLabel.Size                   = UDim2.new(0, 220, 0, 40)
+debugLabel.Position               = UDim2.new(0, 10, 0, 10)
+debugLabel.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
 debugLabel.BackgroundTransparency = 0.5
-debugLabel.TextColor3            = Color3.fromRGB(255, 255, 255)
-debugLabel.Font                  = Enum.Font.Code
-debugLabel.TextSize              = 13
-debugLabel.Text                  = "🌐 Tradutor: 0 textos"
-debugLabel.Parent                = screenGui
+debugLabel.TextColor3             = Color3.fromRGB(255, 255, 255)
+debugLabel.Font                   = Enum.Font.Code
+debugLabel.TextSize               = 13
+debugLabel.Text                   = "🌐 Tradutor: 0 textos"
+debugLabel.Parent                 = screenGui
 
-local count       = 0
-local processing  = {}
+local count      = 0
+local processing = {}
 
 -- ============================================================
 -- TRADUZ UM OBJETO
+-- BUG FIX: pcall captura ok E resultado do IsA corretamente
 -- ============================================================
 local function tryTranslate(obj)
-    -- IsA com pcall para não explodir em objetos destruídos
-    local isText = pcall(function()
+    local ok, isText = pcall(function()
         return obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")
     end)
-    if not isText then return end
-    if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
+    if not ok or not isText then return end
     if processing[obj] then return end
     if not obj.Parent then return end
 
@@ -90,14 +112,13 @@ local function tryTranslate(obj)
 end
 
 -- ============================================================
--- SCAN — usa task.spawn para não travar a thread principal
+-- SCAN
 -- ============================================================
 local function scanContainer(container)
     local ok, descendants = pcall(function()
         return container:GetDescendants()
     end)
     if not ok then return end
-
     for _, desc in ipairs(descendants) do
         task.spawn(tryTranslate, desc)
     end
@@ -106,15 +127,13 @@ end
 -- ============================================================
 -- INICIA
 -- ============================================================
-if playerGui then
-    scanContainer(playerGui)
+scanContainer(playerGui)
 
-    playerGui.DescendantAdded:Connect(function(desc)
-        task.delay(0.8, function()  -- debounce para typewriter
-            task.spawn(tryTranslate, desc)
-        end)
+playerGui.DescendantAdded:Connect(function(desc)
+    task.delay(0.8, function()
+        task.spawn(tryTranslate, desc)
     end)
-end
+end)
 
 print("[GUITranslator] ✅ Rodando! Debug visual no canto superior esquerdo.")
 print("[GUITranslator] 💡 Mude DEBUG_MODE = false para reduzir prints.")
