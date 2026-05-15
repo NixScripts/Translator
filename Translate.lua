@@ -1,9 +1,9 @@
 --[[
     Universal Luau Translator Library
-    v1.2.0 — by NixScripts
+    v1.3.0 — by NixScripts
 
     Uso (executor):
-        local Translator = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/TranslateScript/refs/heads/main/Translate"))()
+        local Translator = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
         local t = Translator.new()
         print(t:translate("Hello World", "pt"))
 
@@ -22,38 +22,33 @@ Translator.__index = Translator
 -- PALAVRAS QUE NÃO PRECISAM DE TRADUÇÃO
 -- ============================================================
 local SKIP_WORDS = {
-    -- Teclas
     ["shift"]=true, ["ctrl"]=true, ["alt"]=true, ["tab"]=true,
     ["esc"]=true, ["enter"]=true, ["delete"]=true, ["backspace"]=true,
     ["space"]=true, ["capslock"]=true, ["numlock"]=true,
-    -- Atalhos comuns em jogos
     ["e"]=true, ["q"]=true, ["w"]=true, ["r"]=true,
     ["f"]=true, ["g"]=true, ["v"]=true, ["c"]=true,
-    -- Termos de jogo iguais nos dois idiomas
     ["ui"]=true, ["npc"]=true, ["hp"]=true, ["mp"]=true,
     ["xp"]=true, ["pvp"]=true, ["pve"]=true, ["id"]=true,
     ["fps"]=true, ["dps"]=true, ["aoe"]=true, ["dot"]=true,
     ["buff"]=true, ["debuff"]=true, ["boss"]=true, ["mob"]=true,
     ["skill"]=true, ["level"]=true, ["loot"]=true, ["grind"]=true,
     ["spawn"]=true, ["map"]=true, ["slot"]=true, ["cd"]=true,
-    -- Siglas técnicas
     ["api"]=true, ["url"]=true, ["html"]=true, ["json"]=true,
     ["ok"]=true, ["status"]=true, ["error"]=true, ["debug"]=true,
 }
 
 -- ============================================================
--- HTTP GET
--- Ambas as APIs usam GET — game:HttpGet é o padrão em executores
+-- HTTP GET — game:HttpGet é o padrão em executores
 -- ============================================================
 local function httpGet(url)
     local ok, result = pcall(function()
-        return game:HttpGet(url, true)
+        return game:HttpGet(url)
     end)
     return ok and result or nil
 end
 
 -- ============================================================
--- URL ENCODE manual — sem depender de nenhum service
+-- URL ENCODE manual
 -- ============================================================
 local function urlEncode(str)
     return str:gsub("([^%w%-%.%_%~])", function(c)
@@ -67,8 +62,8 @@ end
 local function sanitize(text)
     if not text or text == "" then return "" end
     local s = text
-    s = s:gsub("<[^>]+>", "")            -- tags HTML/RichText
-    s = s:gsub("%[color=[^%]]+%]", "")   -- [color=...] do Roblox
+    s = s:gsub("<[^>]+>", "")
+    s = s:gsub("%[color=[^%]]+%]", "")
     s = s:gsub("%[/color%]", "")
     s = s:gsub("&nbsp;",  " ")
     s = s:gsub("&quot;",  '"')
@@ -76,7 +71,8 @@ local function sanitize(text)
     s = s:gsub("&amp;",   "&")
     s = s:gsub("&lt;",    "<")
     s = s:gsub("&gt;",    ">")
-    s = s:match("^%s*(.-)%s*$")           -- trim
+    -- BUG FIX: match pode retornar nil se string virar vazia — usar "or """
+    s = s:match("^%s*(.-)%s*$") or ""
     return s
 end
 
@@ -85,8 +81,8 @@ end
 -- ============================================================
 local function shouldSkip(text)
     if not text or #text < 2 then return true end
-    if text:match("^[%d%s%p]+$") then return true end  -- só números/símbolos
-    if not text:match("%a") then return true end         -- nenhuma letra
+    if text:match("^[%d%s%p]+$") then return true end
+    if not text:match("%a") then return true end
     if SKIP_WORDS[text:lower()] then return true end
     return false
 end
@@ -118,13 +114,12 @@ function Translator.new()
 end
 
 -- ============================================================
--- REQUISIÇÃO: Google Translate (GET) → MyMemory (GET fallback)
--- Ambas as APIs são GET — nenhum POST necessário
+-- REQUISIÇÃO: Google Translate → MyMemory (fallback)
 -- ============================================================
 function Translator:_doRequest(text, targetLang, sourceLang)
     local encoded = urlEncode(text)
 
-    -- API 1: Google Translate (não oficial, ilimitada, mais rápida)
+    -- API 1: Google Translate
     local googleUrl = string.format(
         "https://translate.googleapis.com/translate_a/single?client=gtx&sl=%s&tl=%s&dt=t&q=%s",
         sourceLang, targetLang, encoded
@@ -137,7 +132,7 @@ function Translator:_doRequest(text, targetLang, sourceLang)
         end
     end
 
-    -- API 2: MyMemory (fallback, GET)
+    -- API 2: MyMemory (fallback)
     local mmUrl = string.format(
         "https://api.mymemory.translated.net/get?q=%s&langpair=%s|%s",
         encoded,
