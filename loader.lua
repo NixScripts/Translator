@@ -1,6 +1,6 @@
 --[[
     TranslateScript — Loader para Executor
-    v1.4.0 — by NixScripts
+    v1.4.1 — by NixScripts
 
     Cole este script no seu executor (Xeno, Wave, Solara, etc.) e execute.
 
@@ -175,6 +175,46 @@ local function translateObject(obj)
 end
 
 -- ============================================================
+-- FILTRO DE SEGURANÇA
+-- Evita traduzir labels que o jogo lê de volta (stats, nomes, valores)
+-- Causa de erros: jogo ouve .Changed no label e quebra ao receber texto traduzido
+-- ============================================================
+
+-- Nomes de objetos que o jogo provavelmente usa como dado, não display
+local UNSAFE_NAMES = {
+    ["name"]       = true, ["playername"] = true, ["username"]  = true,
+    ["value"]      = true, ["count"]      = true, ["score"]     = true,
+    ["stat"]       = true, ["stats"]      = true, ["data"]      = true,
+    ["id"]         = true, ["userid"]     = true, ["playerid"]  = true,
+    ["rank"]       = true, ["level"]      = true, ["xp"]        = true,
+    ["gold"]       = true, ["coins"]      = true, ["currency"]  = true,
+    ["health"]     = true, ["hp"]         = true, ["damage"]    = true,
+    ["timer"]      = true, ["time"]       = true, ["clock"]     = true,
+    ["ping"]       = true, ["fps"]        = true, ["server"]    = true,
+    ["mutation"]   = true, ["mutations"]  = true, ["lobby"]     = true,
+    ["key"]        = true, ["tag"]        = true, ["badge"]     = true,
+}
+
+local function isSafeToTranslate(obj)
+    -- Verifica nome do objeto
+    local name = obj.Name:lower()
+    if UNSAFE_NAMES[name] then return false end
+
+    -- Verifica se o nome CONTÉM uma palavra unsafe (ex: "PlayerNameLabel")
+    for word in pairs(UNSAFE_NAMES) do
+        if name:find(word, 1, true) then return false end
+    end
+
+    -- Verifica o texto: se parece dado do jogo (só número, ou número/símbolo)
+    local text = obj.Text or ""
+    if text:match("^%d+$") then return false end           -- só número
+    if text:match("^%d+[%./%%]%d*$") then return false end -- "10/20" ou "50%"
+    if text:match("^[%+%-]?%d+[%.,]?%d*$") then return false end -- "+100" "-50"
+
+    return true
+end
+
+-- ============================================================
 -- DEBOUNCE — aguarda typewriter effect terminar
 -- ============================================================
 local function scheduleTranslation(obj)
@@ -199,6 +239,10 @@ local function watchObject(obj)
         return obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")
     end)
     if not ok or not isText then return end
+
+    -- Filtro de segurança: não toca em labels que o jogo pode ler de volta
+    local ok1, safe = pcall(isSafeToTranslate, obj)
+    if not ok1 or not safe then return end
 
     if isEnabled then
         task.spawn(translateObject, obj)
@@ -359,7 +403,7 @@ end)
 -- ============================================================
 -- INICIA
 -- ============================================================
-print("[TranslateScript] 🚀 TranslateScript v1.4.0 iniciando...")
+print("[TranslateScript] 🚀 TranslateScript v1.4.1 iniciando...")
 print(string.format("[TranslateScript] 🌐 Lang: %s | Debounce: %.1fs | Rate: %.0fms",
     TARGET_LANG, DEBOUNCE_TIME, RATE_DELAY * 1000))
 print("[TranslateScript] F1=Liga/Desliga | F2=Reset | F3=Stats | F4=Erros")
