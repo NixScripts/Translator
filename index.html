@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>TranslateScript — Docs by NIX</title>
+<title>TranslateScript — Docs by NIX v1.4.0</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -551,7 +551,7 @@
 <nav class="sidebar">
   <div class="sidebar-logo">
     <span class="name">TranslateScript</span>
-    <span class="version">v1.3.0</span>
+    <span class="version">v1.4.0</span>
   </div>
 
   <span class="nav-section">Início</span>
@@ -568,6 +568,7 @@
   <a class="nav-link" href="#api-translate">Translate.lua (API)</a>
   <a class="nav-link" href="#api-loader">loader.lua</a>
   <a class="nav-link" href="#keybinds">Atalhos</a>
+  <a class="nav-link" href="#verbose">translateVerbose</a>
   <a class="nav-link" href="#languages">Idiomas</a>
   <a class="nav-link" href="#config">Configuração</a>
 
@@ -706,7 +707,7 @@ print(t:<span class="c-fn">translate</span>(<span class="c-str">"Bonjour"</span>
   <!-- ── PIPELINE ── -->
   <section class="section" id="pipeline">
     <h2 class="section-anchor">Pipeline de Tradução</h2>
-    <p>Cada vez que <code>translate(text, targetLang)</code> é chamado, o texto passa por estas etapas em ordem:</p>
+    <p>Cada vez que <code>translateVerbose(text, targetLang)</code> é chamado, o texto passa por estas etapas em ordem. Cada etapa retorna um <strong>reason</strong> que o loader usa para contabilizar stats precisos:</p>
 
     <div class="pipeline">
       <div class="pipeline-row">
@@ -720,10 +721,10 @@ print(t:<span class="c-fn">translate</span>(<span class="c-str">"Bonjour"</span>
       <div class="pipeline-row">
         <div class="pipeline-idx">2</div>
         <div class="pipeline-content">
-          <div class="pipeline-title">shouldSkip</div>
-          <div class="pipeline-detail">Pula se o texto for muito curto (&lt;2 chars), só números/símbolos, sem letras, ou estiver na lista SKIP_WORDS</div>
+          <div class="pipeline-title">skipReason()</div>
+          <div class="pipeline-detail">Retorna o motivo exato: <code>skip_short</code> (&lt;2 chars), <code>skip_num</code> (só números/símbolos), <code>skip_noltr</code> (sem letras), <code>skip_word</code> (na lista SKIP_WORDS)</div>
         </div>
-        <div class="pipeline-status"><span class="pill skip">→ return original</span></div>
+        <div class="pipeline-status"><span class="pill skip">→ reason</span></div>
       </div>
       <div class="pipeline-row">
         <div class="pipeline-idx">3</div>
@@ -737,25 +738,25 @@ print(t:<span class="c-fn">translate</span>(<span class="c-str">"Bonjour"</span>
         <div class="pipeline-idx">4</div>
         <div class="pipeline-content">
           <div class="pipeline-title">Google Translate API</div>
-          <div class="pipeline-detail">GET para <code>translate.googleapis.com</code> com <code>client=gtx</code>. Parse do JSON com pattern matching. Decode de escapes unicode (<code>\uXXXX</code>)</div>
+          <div class="pipeline-detail">GET para <code>translate.googleapis.com</code> com <code>client=gtx</code>. Parse do JSON, decode de <code>\uXXXX</code>. Retorna <code>result, "api"</code> em caso de sucesso.</div>
         </div>
-        <div class="pipeline-status"><span class="pill primary">API 1</span></div>
+        <div class="pipeline-status"><span class="pill primary">→ "api"</span></div>
       </div>
       <div class="pipeline-row">
         <div class="pipeline-idx">5</div>
         <div class="pipeline-content">
           <div class="pipeline-title">MyMemory (fallback)</div>
-          <div class="pipeline-detail">Se o Google falhar, faz GET para <code>api.mymemory.translated.net</code>. Parse do campo <code>translatedText</code> do JSON de resposta</div>
+          <div class="pipeline-detail">Se o Google falhar, GET para <code>api.mymemory.translated.net</code>. Retorna <code>result, "api_fb"</code>. Se ambas falharem retorna <code>text, "api_failed"</code>.</div>
         </div>
-        <div class="pipeline-status"><span class="pill fallback">API 2</span></div>
+        <div class="pipeline-status"><span class="pill fallback">→ "api_fb"</span></div>
       </div>
       <div class="pipeline-row">
         <div class="pipeline-idx">6</div>
         <div class="pipeline-content">
           <div class="pipeline-title">Salva no cache + retorna</div>
-          <div class="pipeline-detail">Armazena a tradução no cache interno (máx. 1000 entradas, auto-limpa ao atingir o limite). Retorna o texto traduzido</div>
+          <div class="pipeline-detail">Armazena via <code>_storeCache()</code> (máx. 1000 entradas, auto-limpa). Se API retornou o mesmo texto, reason = <code>"same"</code>. Se falhou tudo, reason = <code>"api_failed"</code> e entra no ErrorLog.</div>
         </div>
-        <div class="pipeline-status"><span class="pill success">→ traduzido</span></div>
+        <div class="pipeline-status"><span class="pill success">→ "cache"</span></div>
       </div>
     </div>
   </section>
@@ -825,6 +826,43 @@ print(t:<span class="c-fn">translate</span>(<span class="c-str">"Bonjour"</span>
       </div>
     </div>
 
+    <!-- translateVerbose() -->
+    <div class="method-card" id="verbose">
+      <div class="method-header">
+        <span class="method-name">translator:translateVerbose</span>
+        <span class="method-sig">(text: string, targetLang: string, sourceLang?: string) → string, string</span>
+        <span class="method-return">→ result, reason</span>
+      </div>
+      <div class="method-body">
+        <p>Versão estendida do <code>translate()</code>. Retorna dois valores: o texto traduzido e o <strong>motivo</strong> exato do resultado. Use este método no lugar de <code>translate()</code> quando precisar de stats precisos ou debug de skip.</p>
+        <table class="api-table" style="margin-bottom:1rem;">
+          <thead><tr><th>Reason</th><th>Significado</th></tr></thead>
+          <tbody>
+            <tr><td>"api"</td><td>Traduzido via Google Translate</td></tr>
+            <tr><td>"api_fb"</td><td>Traduzido via MyMemory (fallback)</td></tr>
+            <tr><td>"cache"</td><td>Servido do cache, sem HTTP</td></tr>
+            <tr><td>"custom"</td><td>Traduzido via função customizada</td></tr>
+            <tr><td>"skip_short"</td><td>Texto com menos de 2 caracteres</td></tr>
+            <tr><td>"skip_num"</td><td>Apenas números ou símbolos</td></tr>
+            <tr><td>"skip_word"</td><td>Palavra na lista SKIP_WORDS</td></tr>
+            <tr><td>"skip_noltr"</td><td>Sem letras no texto</td></tr>
+            <tr><td>"same"</td><td>API retornou o mesmo texto (já no idioma alvo)</td></tr>
+            <tr><td>"api_failed"</td><td>Todas as APIs falharam</td></tr>
+          </tbody>
+        </table>
+        <div class="code-block">
+          <div class="code-body"><pre><span class="c-keyword">local</span> <span class="c-var">result</span>, <span class="c-var">reason</span> = t:<span class="c-fn">translateVerbose</span>(<span class="c-str">"Hello World"</span>, <span class="c-str">"pt"</span>)
+<span class="c-comment">-- "Olá Mundo"   "api"</span>
+
+<span class="c-keyword">local</span> <span class="c-var">result</span>, <span class="c-var">reason</span> = t:<span class="c-fn">translateVerbose</span>(<span class="c-str">"Shift"</span>, <span class="c-str">"pt"</span>)
+<span class="c-comment">-- "Shift"        "skip_word"</span>
+
+<span class="c-keyword">local</span> <span class="c-var">result</span>, <span class="c-var">reason</span> = t:<span class="c-fn">translateVerbose</span>(<span class="c-str">"Hello"</span>, <span class="c-str">"pt"</span>)
+<span class="c-comment">-- "Hello"        "cache"  ← segunda chamada, vem do cache</span></pre></div>
+        </div>
+      </div>
+    </div>
+
     <!-- translate() -->
     <div class="method-card">
       <div class="method-header">
@@ -833,7 +871,7 @@ print(t:<span class="c-fn">translate</span>(<span class="c-str">"Bonjour"</span>
         <span class="method-return">→ string</span>
       </div>
       <div class="method-body">
-        <p>Método principal. Traduz <code>text</code> para o idioma <code>targetLang</code>. Se a tradução falhar ou o texto for pulado, retorna o texto original inalterado (nunca retorna nil).</p>
+        <p>Método de compatibilidade — chama <code>translateVerbose()</code> internamente e retorna apenas o resultado. Use <code>translateVerbose()</code> quando precisar do motivo para debug ou stats.</p>
         <table class="api-table" style="margin-bottom: 1rem;">
           <thead><tr><th>Parâmetro</th><th>Tipo</th><th>Padrão</th></tr></thead>
           <tbody>
@@ -957,7 +995,11 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
       </div>
       <div class="keybind">
         <kbd>F3</kbd>
-        <span class="keybind-desc">Exibe estatísticas no console: textos traduzidos, pulados, falhas, API hits, cache hits, uptime e tamanho do cache.</span>
+        <span class="keybind-desc">Estatísticas detalhadas: breakdown real de skip intencional / mesmo texto / falha de API / traduzidos / cache hits / uptime.</span>
+      </div>
+      <div class="keybind">
+        <kbd>F4</kbd>
+        <span class="keybind-desc">Log de erros — últimos 20 erros com horário, categoria (RUNTIME ERROR, API FAILED, SCAN ERROR, WATCH ERROR) e contexto do texto.</span>
       </div>
     </div>
   </section>
@@ -1009,6 +1051,7 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
         <tr><td>SOURCE_LANG</td><td><code>"auto"</code></td><td>Idioma de origem. <code>"auto"</code> deixa o Google detectar automaticamente.</td></tr>
         <tr><td>DEBOUNCE_TIME</td><td><code>0.8</code></td><td>Tempo de espera após a última mudança no texto antes de enviar para tradução. Aumentar se o jogo tiver textos longos com typewriter lento.</td></tr>
         <tr><td>RATE_DELAY</td><td><code>0.2</code></td><td>Intervalo mínimo entre requisições à API. Diminuir aumenta a velocidade, mas pode gerar bloqueio de IP.</td></tr>
+        <tr><td>DEBUG_SKIP</td><td><code>false</code></td><td>Quando <code>true</code>, loga no console cada texto pulado com o motivo exato (<code>skip_word</code>, <code>skip_num</code>, etc.). Útil para calibrar a lista SKIP_WORDS.</td></tr>
       </tbody>
     </table>
   </section>
@@ -1031,7 +1074,7 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
     <p>O código baixado não é Lua válido. Geralmente significa que a URL retornou HTML (página 404 do GitHub). Confirme a URL abrindo no navegador — deve mostrar código Lua puro, não uma página HTML.</p>
 
     <h3>⚠ Textos não são traduzidos</h3>
-    <p>Verifique se o texto não está na lista <code>SKIP_WORDS</code>, se tem menos de 2 caracteres, ou se é composto apenas por números e símbolos. Use <kbd>F3</kbd> para ver quantos textos foram "pulados" vs traduzidos.</p>
+    <p>Verifique se o texto não está na lista <code>SKIP_WORDS</code>, se tem menos de 2 caracteres, ou se é composto apenas por números e símbolos. Ative <code>DEBUG_SKIP = true</code> no loader para ver no console cada texto pulado com o motivo exato. Use <kbd>F3</kbd> para ver o breakdown completo de skip.</p>
 
     <h3>⚠ Tradução atrasada ou incompleta</h3>
     <p>O debounce de 0.8s pode ser curto para jogos com typewriter muito lento. Aumente <code>DEBOUNCE_TIME</code> para 1.5 ou 2.0 no loader.</p>
@@ -1044,6 +1087,19 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
   <section class="section" id="changelog">
     <h2 class="section-anchor">Changelog</h2>
     <div class="changelog">
+      <div class="changelog-item">
+        <div class="changelog-ver">v1.4.0</div>
+        <div class="changelog-entries">
+          <div class="changelog-entry">Adicionado <code>translateVerbose()</code> — retorna <code>result, reason</code> com 10 motivos possíveis</div>
+          <div class="changelog-entry"><code>shouldSkip()</code> refatorado em <code>skipReason()</code> — retorna o motivo em vez de booleano</div>
+          <div class="changelog-entry"><code>_doRequest()</code> retorna <code>result, source</code> ("api" ou "api_fb")</div>
+          <div class="changelog-entry">Loader usa <code>translateVerbose</code> para stats 100% precisos sem heurísticas</div>
+          <div class="changelog-entry">F4 adicionado — log de erros (máx. 20) com horário, categoria e contexto</div>
+          <div class="changelog-entry"><code>DEBUG_SKIP = false</code> no loader — ative para ver cada skip com motivo no console</div>
+          <div class="changelog-entry"><code>_storeCache()</code> extraído como helper interno</div>
+          <div class="changelog-entry">Validação de objeto destruído em <code>translateObject</code> antes de processar</div>
+        </div>
+      </div>
       <div class="changelog-item">
         <div class="changelog-ver">v1.3.0</div>
         <div class="changelog-entries">
@@ -1094,7 +1150,7 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
         <div class="author-handle">github.com/NixScripts</div>
       </div>
     </div>
-    <p style="margin-top:1rem; font-size:13px; color:var(--muted);">TranslateScript v1.3.0 — Documentação gerada manualmente. Licença MIT.</p>
+    <p style="margin-top:1rem; font-size:13px; color:var(--muted);">TranslateScript v1.4.0 — Documentação gerada manualmente. Licença MIT.</p>
   </section>
 
 </main>
