@@ -1,6 +1,6 @@
 --[[
     examples/gui_translator.lua
-    Versão standalone com overlay de debug visual — v1.4.0
+    Versão standalone com overlay de debug visual — v1.4.1
 ]]
 
 local genv = (type(getgenv) == "function" and getgenv()) or _G
@@ -151,5 +151,5 @@ playerGui.DescendantAdded:Connect(function(desc)
     end)
 end)
 
-print("[GUITranslator] ✅ v1.4.0 rodando! Debug visual no canto superior esquerdo.")
+print("[GUITranslator] ✅ v1.4.1 rodando! Debug visual no canto superior esquerdo.")
 print("[GUITranslator] 💡 DEBUG_MODE = false para reduzir prints.")
