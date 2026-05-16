@@ -112,7 +112,7 @@ local DEBUG_SKIP    = false   -- true = loga cada skip com motivo no console
 
 ## Changelog
 
-### v1.4.0
+### v1.4.1
 - Adicionado `translateVerbose()` — retorna `result, reason` com motivo exato
 - `_doRequest()` agora retorna `result, source` ("api" ou "api_fb")
 - Loader usa `translateVerbose` para stats 100% precisos (sem heurísticas de cache)
