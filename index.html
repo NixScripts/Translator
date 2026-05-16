@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>TranslateScript — Docs by NIX v1.4.0</title>
+<title>TranslateScript — Docs by NIX v1.4.1</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
@@ -551,7 +551,7 @@
 <nav class="sidebar">
   <div class="sidebar-logo">
     <span class="name">TranslateScript</span>
-    <span class="version">v1.4.0</span>
+    <span class="version">v1.4.1</span>
   </div>
 
   <span class="nav-section">Início</span>
@@ -1088,7 +1088,16 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
     <h2 class="section-anchor">Changelog</h2>
     <div class="changelog">
       <div class="changelog-item">
-        <div class="changelog-ver">v1.4.0</div>
+        <div class="changelog-ver">v1.4.1</div>
+        <div class="changelog-entries">
+          <div class="changelog-entry">Fix: modificar <code>.Text</code> causava crash em scripts do jogo que ouviam o mesmo label</div>
+          <div class="changelog-entry">Adicionado <code>isSafeToTranslate(obj)</code> — filtra labels pelo nome e pelo conteúdo antes de traduzir</div>
+          <div class="changelog-entry"><code>UNSAFE_NAMES</code> — lista de palavras-chave que indicam labels de dados do jogo (mutation, lobby, value, count, name, stat, hp, timer...)</div>
+          <div class="changelog-entry">Textos puramente numéricos ("123", "10/20", "50%", "+100") nunca são traduzidos</div>
+        </div>
+      </div>
+      <div class="changelog-item">
+        <div class="changelog-ver">v1.4.1</div>
         <div class="changelog-entries">
           <div class="changelog-entry">Adicionado <code>translateVerbose()</code> — retorna <code>result, reason</code> com 10 motivos possíveis</div>
           <div class="changelog-entry"><code>shouldSkip()</code> refatorado em <code>skipReason()</code> — retorna o motivo em vez de booleano</div>
@@ -1150,7 +1159,7 @@ genv.translator     <span class="c-comment">-- A instância ativa usada pelo loa
         <div class="author-handle">github.com/NixScripts</div>
       </div>
     </div>
-    <p style="margin-top:1rem; font-size:13px; color:var(--muted);">TranslateScript v1.4.0 — Documentação gerada manualmente. Licença MIT.</p>
+    <p style="margin-top:1rem; font-size:13px; color:var(--muted);">TranslateScript v1.4.1 — Documentação gerada manualmente. Licença MIT.</p>
   </section>
 
 </main>
