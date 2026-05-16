@@ -1,18 +1,31 @@
 --[[
     Universal Luau Translator Library
-    v1.3.0 — by NixScripts
+    v1.4.0 — by NixScripts
 
     Uso (executor):
         local Translator = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
         local t = Translator.new()
         print(t:translate("Hello World", "pt"))
 
-    Métodos:
-        Translator.new()                        → Cria instância
-        translator:translate(text, targetLang)  → Traduz texto
-        translator:clearCache()                 → Limpa o cache
-        translator:getCacheSize()               → Qtd de entradas no cache
-        translator:setRequestFunction(fn)       → Função HTTP customizada
+    Métodos públicos:
+        Translator.new()
+        translator:translate(text, targetLang, sourceLang?)   → string
+        translator:translateVerbose(text, targetLang, sourceLang?) → result, reason
+        translator:clearCache()
+        translator:getCacheSize()
+        translator:setRequestFunction(fn)
+
+    Razões retornadas por translateVerbose():
+        "cache"      → servido do cache (sem requisição HTTP)
+        "api"        → traduzido via Google Translate
+        "api_fb"     → traduzido via MyMemory (fallback)
+        "custom"     → traduzido via função customizada
+        "skip_short" → texto muito curto (<2 chars)
+        "skip_num"   → apenas números/símbolos
+        "skip_word"  → palavra na lista SKIP_WORDS
+        "skip_noltr" → sem letras
+        "api_failed" → todas as APIs falharam, retornou original
+        "same"       → API retornou mesmo texto (já no idioma alvo)
 ]]
 
 local Translator = {}
@@ -22,17 +35,21 @@ Translator.__index = Translator
 -- PALAVRAS QUE NÃO PRECISAM DE TRADUÇÃO
 -- ============================================================
 local SKIP_WORDS = {
+    -- Teclas
     ["shift"]=true, ["ctrl"]=true, ["alt"]=true, ["tab"]=true,
     ["esc"]=true, ["enter"]=true, ["delete"]=true, ["backspace"]=true,
     ["space"]=true, ["capslock"]=true, ["numlock"]=true,
+    -- Atalhos de jogo (letras únicas)
     ["e"]=true, ["q"]=true, ["w"]=true, ["r"]=true,
     ["f"]=true, ["g"]=true, ["v"]=true, ["c"]=true,
+    -- Termos de jogo iguais em qualquer idioma
     ["ui"]=true, ["npc"]=true, ["hp"]=true, ["mp"]=true,
     ["xp"]=true, ["pvp"]=true, ["pve"]=true, ["id"]=true,
     ["fps"]=true, ["dps"]=true, ["aoe"]=true, ["dot"]=true,
     ["buff"]=true, ["debuff"]=true, ["boss"]=true, ["mob"]=true,
     ["skill"]=true, ["level"]=true, ["loot"]=true, ["grind"]=true,
     ["spawn"]=true, ["map"]=true, ["slot"]=true, ["cd"]=true,
+    -- Siglas técnicas
     ["api"]=true, ["url"]=true, ["html"]=true, ["json"]=true,
     ["ok"]=true, ["status"]=true, ["error"]=true, ["debug"]=true,
 }
@@ -71,20 +88,19 @@ local function sanitize(text)
     s = s:gsub("&amp;",   "&")
     s = s:gsub("&lt;",    "<")
     s = s:gsub("&gt;",    ">")
-    -- BUG FIX: match pode retornar nil se string virar vazia — usar "or """
     s = s:match("^%s*(.-)%s*$") or ""
     return s
 end
 
 -- ============================================================
--- SKIP — decide se o texto precisa ser traduzido
+-- SKIP — retorna motivo do skip ou nil (não pula)
 -- ============================================================
-local function shouldSkip(text)
-    if not text or #text < 2 then return true end
-    if text:match("^[%d%s%p]+$") then return true end
-    if not text:match("%a") then return true end
-    if SKIP_WORDS[text:lower()] then return true end
-    return false
+local function skipReason(text)
+    if not text or #text < 2 then return "skip_short" end
+    if text:match("^[%d%s%p]+$") then return "skip_num" end
+    if not text:match("%a") then return "skip_noltr" end
+    if SKIP_WORDS[text:lower()] then return "skip_word" end
+    return nil
 end
 
 -- ============================================================
@@ -115,6 +131,7 @@ end
 
 -- ============================================================
 -- REQUISIÇÃO: Google Translate → MyMemory (fallback)
+-- Retorna: result, source ("api" | "api_fb" | nil)
 -- ============================================================
 function Translator:_doRequest(text, targetLang, sourceLang)
     local encoded = urlEncode(text)
@@ -128,7 +145,7 @@ function Translator:_doRequest(text, targetLang, sourceLang)
     if resp then
         local translated = resp:match('%[%[%["(.-)"')
         if translated and translated ~= "" then
-            return decodeUnicode(translated)
+            return decodeUnicode(translated), "api"
         end
     end
 
@@ -142,50 +159,79 @@ function Translator:_doRequest(text, targetLang, sourceLang)
     local resp2 = httpGet(mmUrl)
     if resp2 then
         local tr = resp2:match('"translatedText":"(.-)"')
-        if tr and tr ~= "" then return tr end
+        if tr and tr ~= "" then return tr, "api_fb" end
     end
 
-    return nil
+    return nil, nil
 end
 
 -- ============================================================
--- MÉTODO PRINCIPAL
+-- MÉTODO VERBOSE — retorna (result, reason)
+-- Use este no loader para stats precisos
 -- ============================================================
-function Translator:translate(text, targetLang, sourceLang)
+function Translator:translateVerbose(text, targetLang, sourceLang)
     targetLang = targetLang or "pt"
     sourceLang = sourceLang or "auto"
 
     local clean = sanitize(text)
-    if shouldSkip(clean) then return text end
 
+    -- Verifica skip
+    local reason = skipReason(clean)
+    if reason then
+        return text, reason
+    end
+
+    -- Verifica cache
     local cacheKey = clean .. "|" .. targetLang
     if self._cache[cacheKey] then
-        return self._cache[cacheKey]
+        return self._cache[cacheKey], "cache"
     end
 
-    local result
+    -- Função customizada
     if self._customReqFn then
         local ok, res = pcall(self._customReqFn, clean, targetLang, sourceLang)
-        result = ok and res or nil
-    else
-        result = self:_doRequest(clean, targetLang, sourceLang)
+        if ok and res and res ~= "" and res ~= clean then
+            self:_storeCache(cacheKey, res)
+            return res, "custom"
+        end
+        return text, "api_failed"
     end
+
+    -- Requisição às APIs
+    local result, source = self:_doRequest(clean, targetLang, sourceLang)
 
     if result and result ~= "" and result ~= clean then
-        if self._cacheSize >= self._maxCache then
-            self._cache     = {}
-            self._cacheSize = 0
-        end
-        self._cache[cacheKey] = result
-        self._cacheSize = self._cacheSize + 1
-        return result
+        self:_storeCache(cacheKey, result)
+        return result, source
+    elseif result and result == clean then
+        return text, "same"
     end
 
-    return text
+    return text, "api_failed"
 end
 
 -- ============================================================
--- UTILITÁRIOS
+-- MÉTODO PRINCIPAL (compatibilidade — chama translateVerbose)
+-- ============================================================
+function Translator:translate(text, targetLang, sourceLang)
+    local result = self:translateVerbose(text, targetLang, sourceLang)
+    return result
+end
+
+-- ============================================================
+-- HELPER INTERNO — salva no cache com auto-limpeza
+-- ============================================================
+function Translator:_storeCache(key, value)
+    if self._cacheSize >= self._maxCache then
+        self._cache     = {}
+        self._cacheSize = 0
+    end
+    self._cache[key] = value
+    self._cacheSize  = self._cacheSize + 1
+end
+
+-- ============================================================
+-- UTILITÁRIOS PÚBLICOS
 -- ============================================================
 function Translator:clearCache()
     self._cache     = {}
