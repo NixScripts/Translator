@@ -1,7 +1,6 @@
 --[[
     examples/gui_translator.lua
-    Versão standalone com overlay de debug visual na tela.
-    Útil para verificar quais TextLabels estão sendo encontradas.
+    Versão standalone com overlay de debug visual — v1.4.0
 ]]
 
 local genv = (type(getgenv) == "function" and getgenv()) or _G
@@ -22,10 +21,7 @@ for _, url in ipairs(LIB_URLS) do
         local chunk, err = loadstring(raw)
         if chunk then
             local ok2, result = pcall(chunk)
-            if ok2 and result then
-                TranslatorLib = result
-                break
-            end
+            if ok2 and result then TranslatorLib = result break end
         else
             warn("[GUITranslator] ⚠ Compile error: " .. tostring(err))
         end
@@ -40,11 +36,10 @@ end
 
 local translator  = TranslatorLib.new()
 local TARGET_LANG = "pt"
-local DEBUG_MODE  = true
+local DEBUG_MODE  = true  -- false para reduzir prints
 
 -- ============================================================
 -- OVERLAY DE DEBUG
--- BUG FIX: FindFirstChild em vez de WaitForChild (não bloqueia)
 -- ============================================================
 local player    = game:GetService("Players").LocalPlayer
 local playerGui = player:FindFirstChild("PlayerGui")
@@ -62,22 +57,28 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent       = playerGui
 
 local debugLabel = Instance.new("TextLabel")
-debugLabel.Size                   = UDim2.new(0, 220, 0, 40)
+debugLabel.Size                   = UDim2.new(0, 260, 0, 44)
 debugLabel.Position               = UDim2.new(0, 10, 0, 10)
 debugLabel.BackgroundColor3       = Color3.fromRGB(0, 0, 0)
-debugLabel.BackgroundTransparency = 0.5
+debugLabel.BackgroundTransparency = 0.45
 debugLabel.TextColor3             = Color3.fromRGB(255, 255, 255)
 debugLabel.Font                   = Enum.Font.Code
 debugLabel.TextSize               = 13
-debugLabel.Text                   = "🌐 Tradutor: 0 textos"
+debugLabel.Text                   = "🌐 Tradutor: 0 traduzidos | 0 pulados"
 debugLabel.Parent                 = screenGui
 
-local count      = 0
+local stats = { translated = 0, skipped = 0, failed = 0 }
 local processing = {}
 
+local function updateLabel()
+    debugLabel.Text = string.format(
+        "🌐 %d traduzidos | %d pulados | %d falhas",
+        stats.translated, stats.skipped, stats.failed
+    )
+end
+
 -- ============================================================
--- TRADUZ UM OBJETO
--- BUG FIX: pcall captura ok E resultado do IsA corretamente
+-- TRADUZ UM OBJETO — usa translateVerbose para stats precisos
 -- ============================================================
 local function tryTranslate(obj)
     local ok, isText = pcall(function()
@@ -92,20 +93,37 @@ local function tryTranslate(obj)
 
     processing[obj] = true
 
-    local success, result = pcall(function()
-        return translator:translate(original, TARGET_LANG)
+    local success, result, reason = pcall(function()
+        return translator:translateVerbose(original, TARGET_LANG)
     end)
 
-    if success and result and result ~= original then
+    if not success then
+        stats.failed = stats.failed + 1
+        updateLabel()
+        processing[obj] = nil
+        return
+    end
+
+    if reason == "api" or reason == "api_fb" or reason == "cache" or reason == "custom" then
         if obj.Parent and obj.Text == original then
             obj.Text = result
-            count += 1
-            debugLabel.Text = string.format("🌐 Tradutor: %d textos", count)
+            stats.translated = stats.translated + 1
+            updateLabel()
             if DEBUG_MODE then
-                print(string.format("[GUITranslator] '%s' → '%s'",
-                    original:sub(1, 40), result:sub(1, 40)))
+                print(string.format("[GUITranslator] (%s) '%s' → '%s'",
+                    reason, original:sub(1,40), result:sub(1,40)))
             end
         end
+    elseif reason == "api_failed" then
+        stats.failed = stats.failed + 1
+        updateLabel()
+        if DEBUG_MODE then
+            warn(string.format("[GUITranslator] ❌ api_failed: '%s'", original:sub(1,40)))
+        end
+    else
+        -- skip_short, skip_num, skip_word, skip_noltr, same
+        stats.skipped = stats.skipped + 1
+        updateLabel()
     end
 
     processing[obj] = nil
@@ -115,9 +133,7 @@ end
 -- SCAN
 -- ============================================================
 local function scanContainer(container)
-    local ok, descendants = pcall(function()
-        return container:GetDescendants()
-    end)
+    local ok, descendants = pcall(function() return container:GetDescendants() end)
     if not ok then return end
     for _, desc in ipairs(descendants) do
         task.spawn(tryTranslate, desc)
@@ -135,5 +151,5 @@ playerGui.DescendantAdded:Connect(function(desc)
     end)
 end)
 
-print("[GUITranslator] ✅ Rodando! Debug visual no canto superior esquerdo.")
-print("[GUITranslator] 💡 Mude DEBUG_MODE = false para reduzir prints.")
+print("[GUITranslator] ✅ v1.4.0 rodando! Debug visual no canto superior esquerdo.")
+print("[GUITranslator] 💡 DEBUG_MODE = false para reduzir prints.")
