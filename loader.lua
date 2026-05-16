@@ -363,7 +363,7 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
         local total = Stats.translated + totalSkipped + Stats.failed
         local pct = total > 0 and math.floor(Stats.translated / total * 100) or 0
         print(string.format(
-            "[TranslateScript] 📊 Stats (v1.4.0):\n"..
+            "[TranslateScript] 📊 Stats (v1.4.1):\n"..
             "  ✅ Traduzidos       : %d (%d%%)\n"..
             "  ⏭  Skip intencional : %d  (números, SKIP_WORDS, <2 chars)\n"..
             "  ≈  Skip mesmo texto : %d  (já no idioma alvo ou API sem retorno)\n"..
