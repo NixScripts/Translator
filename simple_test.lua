@@ -1,6 +1,6 @@
 --[[
     examples/simple_test.lua
-    Teste rápido da biblioteca — v1.4.0
+    Teste rápido da biblioteca — v1.4.1
     Mostra resultado E motivo de cada tradução.
 ]]
 
@@ -51,7 +51,7 @@ local tests = {
     "e",              -- skip_short
 }
 
-print("\n[TESTE] === Testes de tradução (v1.4.0) ===")
+print("\n[TESTE] === Testes de tradução (v1.4.1) ===")
 for i, text in ipairs(tests) do
     local result, reason = t:translateVerbose(text, "pt")
     local icon = (result ~= text) and "✅" or "⏭"
