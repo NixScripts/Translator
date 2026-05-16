@@ -1,102 +1,140 @@
 # TranslateScript 🌐
 
-Script de tradução universal para executores Roblox. Traduz automaticamente todos os textos visíveis de qualquer jogo, em tempo real, para o idioma que você escolher.
+Biblioteca Luau de tradução automática para executores Roblox. Traduz em tempo real todos os textos visíveis de qualquer jogo, para o idioma que você escolher.
 
 ## ✨ Funcionalidades
 
 - **Tradução automática** de TextLabels, TextButtons e TextBoxes
-- **APIs em cascata**: Google Translate → MyMemory (sem limite prático, GET puro)
+- **APIs em cascata**: Google Translate → MyMemory (GET puro, sem POST)
+- **`translateVerbose()`** — retorna o resultado e o motivo exato (api, cache, skip_word, api_failed, etc.)
 - **Debounce inteligente** — aguarda typewriter effect terminar antes de traduzir
-- **Cache embutido** — textos já traduzidos são reutilizados instantaneamente
+- **Cache interno** — textos já traduzidos reutilizados instantaneamente (máx. 1000 entradas)
 - **Loop prevention** — não entra em loop ao modificar `.Text`
-- **Rate limiting** — espaça requisições para não ser bloqueado
-- **Palavras neutras** — Shift, Ctrl, HP, NPC etc. não são traduzidas
-- **Sanitização de tags** — remove `<font color>` e outros RichText antes de traduzir
-- **Proteção de dupla execução** — `getgenv()` (ou `_G` como fallback) evita conflitos ao rodar duas vezes
-- **Compatível com executores**: Xeno, Wave, Solara, Synapse X, KRNL e outros
+- **Log de erros** (F4) — últimos 20 erros com horário, categoria e contexto
+- **Stats detalhados** (F3) — breakdown de skip intencional vs falha de API vs já traduzido
+- **Proteção de dupla execução** — `getgenv()` com fallback para `_G`
+- **Compatível com**: Xeno, Wave, Solara, Synapse X, KRNL e outros
 
 ## 🚀 Como usar
 
-### Opção 1: Loader completo (recomendado)
+### Loader completo (recomendado)
+Cole o conteúdo de `loader.lua` no executor e execute.
 
-Cole o conteúdo de `loader.lua` no seu executor e execute. Ele baixa a biblioteca automaticamente e ativa a tradução no jogo.
-
-### Opção 2: Via loadstring manual
-
+### loadstring manual
 ```lua
-local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
+local TranslatorLib = loadstring(game:HttpGet(
+    "https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"
+))()
+
 local t = TranslatorLib.new()
-print(t:translate("Hello World", "pt"))  -- Olá Mundo
+
+-- Tradução simples
+print(t:translate("Hello World", "pt"))  -- "Olá Mundo"
+
+-- Tradução com motivo (para debug/stats)
+local result, reason = t:translateVerbose("Hello World", "pt")
+print(result, reason)  -- "Olá Mundo"   "api"
 ```
 
 ## ⌨️ Atalhos (loader.lua)
 
 | Tecla | Ação |
 |-------|------|
-| `F1` | Liga / Desliga a tradução + Rescan completo |
-| `F2` | Limpa cache + Re-traduz tudo do zero |
-| `F3` | Exibe estatísticas no console |
+| `F1` | Liga / Desliga + Rescan completo |
+| `F2` | Limpa cache + Re-traduz tudo |
+| `F3` | Estatísticas detalhadas (breakdown de skip) |
+| `F4` | Log de erros com horário e contexto |
 
-## 📁 Estrutura do Repositório
-
-```
-TranslateScript/
-├── Translate.lua          ← Módulo principal (biblioteca)
-├── loader.lua             ← Script para colar no executor
-├── README.md
-└── examples/
-    ├── simple_test.lua    ← Teste rápido de tradução
-    └── gui_translator.lua ← Versão standalone com debug visual
-```
-
-## 🔧 API da Biblioteca
+## 🔧 API — Translate.lua
 
 ```lua
-local TranslatorLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
-
 -- Criar instância
 local t = TranslatorLib.new()
 
--- Traduzir texto
-local resultado = t:translate("Play Game", "pt")
+-- Traduzir (retorna string)
+t:translate(text, targetLang, sourceLang?)
 
--- Traduzir com idioma de origem explícito
-local resultado = t:translate("Play Game", "pt", "en")
+-- Traduzir com motivo (retorna result, reason)
+t:translateVerbose(text, targetLang, sourceLang?)
 
--- Limpar cache
+-- Utilitários
 t:clearCache()
-
--- Ver tamanho do cache
-print(t:getCacheSize())
-
--- Usar função de requisição customizada
-t:setRequestFunction(function(text, targetLang, sourceLang)
-    -- sua lógica aqui
-    return texto_traduzido
-end)
+t:getCacheSize()
+t:setRequestFunction(fn)  -- substituir lógica HTTP por função customizada
 ```
 
-## 🌍 Idiomas suportados
+### Razões retornadas por `translateVerbose()`
 
-Qualquer idioma suportado pelo Google Translate. Exemplos:
+| Reason | Significado |
+|--------|-------------|
+| `"api"` | Traduzido via Google Translate |
+| `"api_fb"` | Traduzido via MyMemory (fallback) |
+| `"cache"` | Servido do cache, sem requisição HTTP |
+| `"custom"` | Traduzido via função customizada |
+| `"skip_short"` | Texto muito curto (< 2 chars) |
+| `"skip_num"` | Apenas números ou símbolos |
+| `"skip_word"` | Palavra na lista SKIP_WORDS |
+| `"skip_noltr"` | Sem letras no texto |
+| `"same"` | API retornou o mesmo texto (já no idioma alvo) |
+| `"api_failed"` | Todas as APIs falharam |
 
-| Código | Idioma    |
-|--------|-----------|
-| `pt`   | Português |
-| `en`   | Inglês    |
-| `es`   | Espanhol  |
-| `fr`   | Francês   |
-| `de`   | Alemão    |
-| `ja`   | Japonês   |
-| `zh`   | Chinês    |
+## 📁 Estrutura
 
-## ⚙️ Como funciona internamente
+```
+Translator/
+├── Translate.lua          ← Módulo principal
+├── loader.lua             ← Cola no executor
+├── README.md
+└── examples/
+    ├── simple_test.lua    ← Testa translateVerbose com motivos
+    └── gui_translator.lua ← Overlay de debug visual
+```
 
-1. `loader.lua` usa `loadstring(game:HttpGet(url))()` — padrão de executor — para baixar e executar `Translate.lua` do GitHub
-2. `getgenv()` (com fallback para `_G`) guarda o estado global do executor, evitando conflito se executar duas vezes
-3. Toda requisição HTTP usa `game:HttpGet()` (GET puro), sem depender de `HttpService`
-4. Google Translate é consultado primeiro; se falhar, cai para MyMemory automaticamente
+## 🌍 Idiomas
 
-## ⚠️ Aviso
+| Código | Idioma | Código | Idioma |
+|--------|--------|--------|--------|
+| `pt` | Português | `ja` | Japonês |
+| `en` | Inglês | `ko` | Coreano |
+| `es` | Espanhol | `zh` | Chinês |
+| `fr` | Francês | `ru` | Russo |
+| `de` | Alemão | `ar` | Árabe |
 
-Este script é destinado a uso pessoal para compreensão de jogos. Use com responsabilidade.
+## ⚙️ Configuração (loader.lua)
+
+```lua
+local TARGET_LANG   = "pt"    -- idioma alvo
+local SOURCE_LANG   = "auto"  -- detecção automática
+local DEBOUNCE_TIME = 0.8     -- segundos aguardando typewriter
+local RATE_DELAY    = 0.2     -- intervalo entre requisições
+local DEBUG_SKIP    = false   -- true = loga cada skip com motivo no console
+```
+
+## Changelog
+
+### v1.4.0
+- Adicionado `translateVerbose()` — retorna `result, reason` com motivo exato
+- `_doRequest()` agora retorna `result, source` ("api" ou "api_fb")
+- Loader usa `translateVerbose` para stats 100% precisos (sem heurísticas de cache)
+- Stats F3 com breakdown real: skip intencional / same / api_failed
+- F4 adicionado — log de erros com horário, categoria e contexto (máx. 20)
+- `DEBUG_SKIP = false` no loader — ative para ver cada skip com motivo no console
+- `_storeCache()` extraído como helper interno
+- Validação de objeto destruído em `translateObject` antes de processar
+
+### v1.3.0
+- Fix: `pcall` em `watchObject` capturando resultado do `IsA` corretamente
+- Fix: `sanitize()` com `or ""` no match
+- Fix: `WaitForChild` substituído por `FindFirstChild` + fallback async
+
+### v1.2.0
+- Proteção de dupla execução via `getgenv()` com fallback `_G`
+- Carregamento separado em download → compilação → execução
+- Removido `httpPost` e `HttpService` — GET puro apenas
+
+### v1.1.0
+- Fix: globals de executor via `rawget(_G, ...)`
+- `scanGui` migrado para `GetDescendants()`
+
+### v1.0.0
+- Lançamento inicial
