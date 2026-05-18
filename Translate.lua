@@ -1,6 +1,6 @@
 --[[
     Universal Luau Translator Library
-    v1.4.0 — by NixScripts
+    Alpha — by NixScripts
 
     Uso (executor):
         local Translator = loadstring(game:HttpGet("https://raw.githubusercontent.com/NixScripts/Translator/refs/heads/main/Translate.lua"))()
@@ -213,8 +213,12 @@ end
 -- ============================================================
 -- MÉTODO PRINCIPAL (compatibilidade — chama translateVerbose)
 -- ============================================================
+-- ============================================================
+-- MÉTODO PRINCIPAL — wrapper simples sobre translateVerbose
+-- Retorna apenas o texto (sem reason) para uso direto
+-- ============================================================
 function Translator:translate(text, targetLang, sourceLang)
-    local result = self:translateVerbose(text, targetLang, sourceLang)
+    local result, _ = self:translateVerbose(text, targetLang, sourceLang)
     return result
 end
 

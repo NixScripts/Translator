@@ -1,6 +1,6 @@
 --[[
     TranslateScript — Loader para Executor
-    v1.4.1 — by NixScripts
+    Alpha — by NixScripts
 
     Cole este script no seu executor (Xeno, Wave, Solara, etc.) e execute.
 
@@ -180,36 +180,31 @@ end
 -- Causa de erros: jogo ouve .Changed no label e quebra ao receber texto traduzido
 -- ============================================================
 
--- Nomes de objetos que o jogo provavelmente usa como dado, não display
-local UNSAFE_NAMES = {
-    ["name"]       = true, ["playername"] = true, ["username"]  = true,
-    ["value"]      = true, ["count"]      = true, ["score"]     = true,
-    ["stat"]       = true, ["stats"]      = true, ["data"]      = true,
-    ["id"]         = true, ["userid"]     = true, ["playerid"]  = true,
-    ["rank"]       = true, ["level"]      = true, ["xp"]        = true,
-    ["gold"]       = true, ["coins"]      = true, ["currency"]  = true,
-    ["health"]     = true, ["hp"]         = true, ["damage"]    = true,
-    ["timer"]      = true, ["time"]       = true, ["clock"]     = true,
-    ["ping"]       = true, ["fps"]        = true, ["server"]    = true,
-    ["mutation"]   = true, ["mutations"]  = true, ["lobby"]     = true,
-    ["key"]        = true, ["tag"]        = true, ["badge"]     = true,
+-- Nomes de SEGMENTOS que indicam campo de dado (não display)
+-- BUG FIX: era name:find(word) — substring match sem fronteira de palavra
+-- "DialogueLabel" continha "id", "TitleName" continha "name" → labels legítimos bloqueados
+-- Fix: gmatch("[a-z]+") separa o nome em segmentos e checa cada um individualmente
+local UNSAFE_SEGMENTS = {
+    ["value"]=true, ["data"]=true, ["score"]=true, ["count"]=true,
+    ["stat"]=true, ["stats"]=true, ["timer"]=true, ["clock"]=true,
+    ["ping"]=true, ["userid"]=true, ["playerid"]=true,
+    ["mutation"]=true, ["mutations"]=true,
 }
 
 local function isSafeToTranslate(obj)
-    -- Verifica nome do objeto
     local name = obj.Name:lower()
-    if UNSAFE_NAMES[name] then return false end
 
-    -- Verifica se o nome CONTÉM uma palavra unsafe (ex: "PlayerNameLabel")
-    for word in pairs(UNSAFE_NAMES) do
-        if name:find(word, 1, true) then return false end
+    -- Segmenta o nome por fronteiras de palavra e checa cada parte
+    -- "MutationValueLabel" → "mutation","value","label" → bloqueado
+    -- "DialogueLabel"      → "dialogue","label"         → seguro ✓
+    -- "TitleName"          → "title","name"             → seguro ✓
+    for segment in name:gmatch("[a-z]+") do
+        if UNSAFE_SEGMENTS[segment] then return false end
     end
 
-    -- Verifica o texto: se parece dado do jogo (só número, ou número/símbolo)
+    -- Texto puramente numérico/dado — nunca traduzir
     local text = obj.Text or ""
-    if text:match("^%d+$") then return false end           -- só número
-    if text:match("^%d+[%./%%]%d*$") then return false end -- "10/20" ou "50%"
-    if text:match("^[%+%-]?%d+[%.,]?%d*$") then return false end -- "+100" "-50"
+    if text:match("^%s*[%d%+%-%.,%%/:]+%s*$") then return false end
 
     return true
 end
@@ -240,7 +235,7 @@ local function watchObject(obj)
     end)
     if not ok or not isText then return end
 
-    -- Filtro de segurança: não toca em labels que o jogo pode ler de volta
+    -- Filtro de segurança: não toca em labels que o jogo usa como dado
     local ok1, safe = pcall(isSafeToTranslate, obj)
     if not ok1 or not safe then return end
 
@@ -363,7 +358,7 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
         local total = Stats.translated + totalSkipped + Stats.failed
         local pct = total > 0 and math.floor(Stats.translated / total * 100) or 0
         print(string.format(
-            "[TranslateScript] 📊 Stats (v1.4.1):\n"..
+            "[TranslateScript] 📊 Stats (Alpha):\n"..
             "  ✅ Traduzidos       : %d (%d%%)\n"..
             "  ⏭  Skip intencional : %d  (números, SKIP_WORDS, <2 chars)\n"..
             "  ≈  Skip mesmo texto : %d  (já no idioma alvo ou API sem retorno)\n"..
@@ -403,7 +398,7 @@ end)
 -- ============================================================
 -- INICIA
 -- ============================================================
-print("[TranslateScript] 🚀 TranslateScript v1.4.1 iniciando...")
+print("[TranslateScript] 🚀 TranslateScript Alpha iniciando...")
 print(string.format("[TranslateScript] 🌐 Lang: %s | Debounce: %.1fs | Rate: %.0fms",
     TARGET_LANG, DEBOUNCE_TIME, RATE_DELAY * 1000))
 print("[TranslateScript] F1=Liga/Desliga | F2=Reset | F3=Stats | F4=Erros")
